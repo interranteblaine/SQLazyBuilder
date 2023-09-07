@@ -1,3 +1,6 @@
+from .registry import is_registered_query_class
+
+
 class Column:
     def __init__(self, table, name):
         self.table = table
@@ -64,9 +67,9 @@ class Condition:
         self.operator = operator
         self.value = value
 
-        if self.operator == "IN" and not isinstance(self.value, (list, tuple)):
+        if self.operator == "IN" and not isinstance(self.value, (list, tuple)) and not is_registered_query_class(self.value):
             raise ValueError(
-                "Values for 'IN' condition must be in a list or tuple.")
+                "Values for 'IN' condition must be in a list, tuple or a sub query.")
 
     def __str__(self):
         if isinstance(self.value, Column):
@@ -78,6 +81,9 @@ class Condition:
         elif isinstance(self.value, (list, tuple)):
             placeholders = ", ".join(["%s"] * len(self.value))
             return f"{self.column} {self.operator} ({placeholders})"
+        elif is_registered_query_class(self.value):
+            subquery_str, _ = self.value.build()
+            return f"{self.column} {self.operator} ({subquery_str})"
         else:
             return f"{self.column} {self.operator} %s"
 
@@ -89,6 +95,9 @@ class Condition:
             return []
         elif isinstance(self.value, (list, tuple)):
             return list(self.value)
+        elif is_registered_query_class(self.value):
+            _, subquery_params = self.value.build()
+            return subquery_params
         else:
             return [self.value]
 
