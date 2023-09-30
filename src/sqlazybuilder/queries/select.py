@@ -1,4 +1,5 @@
 from ..core.base import BaseQuery
+from ..expressions.joins import InnerJoin, LeftJoin, RightJoin, FullJoin
 
 
 class SelectQuery(BaseQuery):
@@ -9,6 +10,7 @@ class SelectQuery(BaseQuery):
         self._order_by = []
         self._limit = None
         self._offset = None
+        self._joins = []
 
     def select(self, *columns):
         self._columns.extend(columns)
@@ -32,6 +34,22 @@ class SelectQuery(BaseQuery):
         self._offset = offset
         return self
 
+    def inner_join(self, table, condition):
+        self._joins.append(InnerJoin(table, condition))
+        return self
+
+    def left_join(self, table, condition):
+        self._joins.append(LeftJoin(table, condition))
+        return self
+
+    def right_join(self, table, condition):
+        self._joins.append(RightJoin(table, condition))
+        return self
+
+    def full_join(self, table, condition):
+        self._joins.append(FullJoin(table, condition))
+        return self
+
     def build(self):
         if not self._columns:
             select_clause = "SELECT *"
@@ -39,6 +57,8 @@ class SelectQuery(BaseQuery):
             select_clause = f"SELECT {', '.join(map(str, self._columns))}"
 
         from_clause = f"FROM {self._table}"
+
+        join_clause = " ".join([str(join) for join in self._joins])
 
         where_clause = ""
         if self._conditions:
@@ -61,6 +81,8 @@ class SelectQuery(BaseQuery):
 
         query_parts = [select_clause, from_clause]
 
+        if join_clause:
+            query_parts.append(join_clause)
         if where_clause:
             query_parts.append(where_clause)
         if order_clause:
@@ -75,5 +97,7 @@ class SelectQuery(BaseQuery):
         params = []
         for condition in self._conditions:
             params.extend(condition.params)
+        for join in self._joins:
+            params.extend(join.params)
 
         return query, params

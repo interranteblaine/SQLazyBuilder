@@ -9,6 +9,10 @@ class TestSelectQuery(unittest.TestCase):
         self.username_col = self.users.column("username")
         self.age_col = self.users.column("age")
 
+        self.orders = Table("orders")
+        self.order_id_col = self.orders.column("order_id")
+        self.user_id_col = self.orders.column("user_id")
+
     def test_basic_select(self):
         query = SelectQuery(self.users).build()
         self.assertEqual(query, ("SELECT * FROM users", []))
@@ -66,6 +70,47 @@ class TestSelectQuery(unittest.TestCase):
             self.age_col, "DESC").limit(10).offset(5).build()
         self.assertEqual(
             query, ("SELECT * FROM users ORDER BY users.age DESC LIMIT 10 OFFSET 5", []))
+
+    def test_inner_join(self):
+        query = (SelectQuery(self.users)
+                 .select(self.username_col)
+                 .inner_join(self.orders, self.users.column("id").eq(self.user_id_col))
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.username FROM users INNER JOIN orders ON users.id = orders.user_id", []))
+
+    def test_left_join(self):
+        query = (SelectQuery(self.users)
+                 .select(self.username_col)
+                 .left_join(self.orders, self.users.column("id").eq(self.user_id_col))
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.username FROM users LEFT JOIN orders ON users.id = orders.user_id", []))
+
+    def test_right_join(self):
+        query = (SelectQuery(self.users)
+                 .select(self.username_col)
+                 .right_join(self.orders, self.users.column("id").eq(self.user_id_col))
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.username FROM users RIGHT JOIN orders ON users.id = orders.user_id", []))
+
+    def test_full_join(self):
+        query = (SelectQuery(self.users)
+                 .select(self.username_col)
+                 .full_join(self.orders, self.users.column("id").eq(self.user_id_col))
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.username FROM users FULL JOIN orders ON users.id = orders.user_id", []))
+
+    def test_join_with_conditions(self):
+        query = (SelectQuery(self.users)
+                 .select(self.username_col)
+                 .inner_join(self.orders, self.users.column("id").eq(self.user_id_col))
+                 .where(self.username_col.eq("John"))
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.username FROM users INNER JOIN orders ON users.id = orders.user_id WHERE users.username = %s", ["John"]))
 
 
 if __name__ == '__main__':
