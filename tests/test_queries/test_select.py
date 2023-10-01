@@ -1,6 +1,7 @@
 import unittest
 from src.sqlazybuilder.core.table import Table
 from src.sqlazybuilder.queries.select import SelectQuery
+from src.sqlazybuilder.expressions.functions import CountAll
 
 
 class TestSelectQuery(unittest.TestCase):
@@ -111,6 +112,32 @@ class TestSelectQuery(unittest.TestCase):
                  .build())
         self.assertEqual(
             query, ("SELECT users.username FROM users INNER JOIN orders ON users.id = orders.user_id WHERE users.username = %s", ["John"]))
+
+    def test_group_by(self):
+        query = (SelectQuery(self.users)
+                 .select(self.age_col, CountAll())
+                 .group_by(self.age_col)
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.age, COUNT(*) FROM users GROUP BY users.age", []))
+
+    def test_group_by_with_conditions(self):
+        query = (SelectQuery(self.users)
+                 .select(self.age_col, CountAll())
+                 .where(self.age_col.gt(20))
+                 .group_by(self.age_col)
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.age, COUNT(*) FROM users WHERE users.age > %s GROUP BY users.age", [20]))
+
+    def test_having(self):
+        query = (SelectQuery(self.users)
+                 .select(self.age_col, CountAll())
+                 .group_by(self.age_col)
+                 .having(CountAll().gt(5))
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.age, COUNT(*) FROM users GROUP BY users.age HAVING COUNT(*) > %s", [5]))
 
 
 if __name__ == '__main__':

@@ -11,6 +11,8 @@ class SelectQuery(BaseQuery):
         self._limit = None
         self._offset = None
         self._joins = []
+        self._group_by = []
+        self._having_conditions = []
 
     def select(self, *columns):
         self._columns.extend(columns)
@@ -50,6 +52,14 @@ class SelectQuery(BaseQuery):
         self._joins.append(FullJoin(table, condition))
         return self
 
+    def group_by(self, *columns):
+        self._group_by.extend(columns)
+        return self
+
+    def having(self, *conditions):
+        self._having_conditions.extend(conditions)
+        return self
+
     def build(self):
         if not self._columns:
             select_clause = "SELECT *"
@@ -58,46 +68,48 @@ class SelectQuery(BaseQuery):
 
         from_clause = f"FROM {self._table}"
 
-        join_clause = " ".join([str(join) for join in self._joins])
+        query_parts = [select_clause, from_clause]
+        params = []
 
-        where_clause = ""
+        join_clause = " ".join([str(join) for join in self._joins])
+        if join_clause:
+            query_parts.append(join_clause)
+            for join in self._joins:
+                params.extend(join.params)
+
         if self._conditions:
             conditions_str = " AND ".join(map(str, self._conditions))
             where_clause = f"WHERE {conditions_str}"
+            query_parts.append(where_clause)
+            for condition in self._conditions:
+                params.extend(condition.params)
 
-        order_clause = ""
+        if self._group_by:
+            group_by_str = ", ".join(map(str, self._group_by))
+            group_by_clause = f"GROUP BY {group_by_str}"
+            query_parts.append(group_by_clause)
+
+        if self._having_conditions:
+            having_str = " AND ".join(map(str, self._having_conditions))
+            having_clause = f"HAVING {having_str}"
+            query_parts.append(having_clause)
+            for condition in self._having_conditions:
+                params.extend(condition.params)
+
         if self._order_by:
             order_by_str = ", ".join(
                 [f"{col} {dir}" for col, dir in self._order_by])
             order_clause = f"ORDER BY {order_by_str}"
+            query_parts.append(order_clause)
 
-        limit_clause = ""
         if self._limit:
             limit_clause = f"LIMIT {self._limit}"
+            query_parts.append(limit_clause)
 
-        offset_clause = ""
         if self._offset:
             offset_clause = f"OFFSET {self._offset}"
-
-        query_parts = [select_clause, from_clause]
-
-        if join_clause:
-            query_parts.append(join_clause)
-        if where_clause:
-            query_parts.append(where_clause)
-        if order_clause:
-            query_parts.append(order_clause)
-        if limit_clause:
-            query_parts.append(limit_clause)
-        if offset_clause:
             query_parts.append(offset_clause)
 
         query = " ".join(query_parts)
-
-        params = []
-        for condition in self._conditions:
-            params.extend(condition.params)
-        for join in self._joins:
-            params.extend(join.params)
 
         return query, params
