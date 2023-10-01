@@ -1,10 +1,12 @@
 from ..core.base import BaseQuery
 from ..expressions.joins import InnerJoin, LeftJoin, RightJoin, FullJoin
+from ..expressions.columns import Column
 
 
 class SelectQuery(BaseQuery):
-    def __init__(self, table):
-        self._table = table
+    def __init__(self, table_or_subquery, alias=None):
+        self._table = table_or_subquery
+        self.alias = alias
         self._columns = []
         self._conditions = []
         self._order_by = []
@@ -13,6 +15,13 @@ class SelectQuery(BaseQuery):
         self._joins = []
         self._group_by = []
         self._having_conditions = []
+
+    def as_alias(self, alias_name):
+        self.alias = alias_name
+        return self
+
+    def column(self, column_name):
+        return Column(self.alias, column_name) if self.alias else Column(str(self._table), column_name)
 
     def select(self, *columns):
         self._columns.extend(columns)
@@ -36,20 +45,20 @@ class SelectQuery(BaseQuery):
         self._offset = offset
         return self
 
-    def inner_join(self, table, condition):
-        self._joins.append(InnerJoin(table, condition))
+    def inner_join(self, table_or_subquery, condition):
+        self._joins.append(InnerJoin(table_or_subquery, condition))
         return self
 
-    def left_join(self, table, condition):
-        self._joins.append(LeftJoin(table, condition))
+    def left_join(self, table_or_subquery, condition):
+        self._joins.append(LeftJoin(table_or_subquery, condition))
         return self
 
-    def right_join(self, table, condition):
-        self._joins.append(RightJoin(table, condition))
+    def right_join(self, table_or_subquery, condition):
+        self._joins.append(RightJoin(table_or_subquery, condition))
         return self
 
-    def full_join(self, table, condition):
-        self._joins.append(FullJoin(table, condition))
+    def full_join(self, table_or_subquery, condition):
+        self._joins.append(FullJoin(table_or_subquery, condition))
         return self
 
     def group_by(self, *columns):
@@ -66,10 +75,18 @@ class SelectQuery(BaseQuery):
         else:
             select_clause = f"SELECT {', '.join(map(str, self._columns))}"
 
-        from_clause = f"FROM {self._table}"
+        # Check if the table is a subquery
+        if isinstance(self._table, BaseQuery):
+            if not self._table.alias:
+                raise ValueError("Alias required for subquery in FROM clause.")
+            subquery_sql, subquery_params = self._table.build()
+            from_clause = f"FROM ({subquery_sql}) AS {self._table.alias}"
+            params = subquery_params
+        else:
+            from_clause = f"FROM {self._table}"
+            params = []
 
         query_parts = [select_clause, from_clause]
-        params = []
 
         join_clause = " ".join([str(join) for join in self._joins])
         if join_clause:

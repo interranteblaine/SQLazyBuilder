@@ -1,12 +1,13 @@
 import unittest
 from src.sqlazybuilder.core.table import Table
 from src.sqlazybuilder.queries.select import SelectQuery
-from src.sqlazybuilder.expressions.functions import CountAll
+from src.sqlazybuilder.expressions.functions import CountAll, Avg
 
 
 class TestSelectQuery(unittest.TestCase):
     def setUp(self):
         self.users = Table("users")
+        self.id_col = self.users.column('id')
         self.username_col = self.users.column("username")
         self.age_col = self.users.column("age")
 
@@ -138,6 +139,64 @@ class TestSelectQuery(unittest.TestCase):
                  .build())
         self.assertEqual(
             query, ("SELECT users.age, COUNT(*) FROM users GROUP BY users.age HAVING COUNT(*) > %s", [5]))
+
+    def test_subquery_in_from_clause(self):
+        subq = SelectQuery(self.users).select(self.username_col).where(
+            self.age_col.gt(25)).as_alias("filtered_users")
+        query = SelectQuery(subq).select(subq.column("username")).build()
+        self.assertEqual(
+            query, ("SELECT filtered_users.username FROM (SELECT users.username FROM users WHERE users.age > %s) AS filtered_users", [25]))
+
+    def test_subquery_in_where_clause(self):
+        subq = SelectQuery(self.orders).select(
+            self.order_id_col).where(self.order_id_col.lt(500))
+        query = SelectQuery(self.users).select(
+            self.username_col).where(self.id_col.in_(subq)).build()
+        self.assertEqual(
+            query, ("SELECT users.username FROM users WHERE users.id IN (SELECT orders.order_id FROM orders WHERE orders.order_id < %s)", [500]))
+
+    def test_join_with_subquery(self):
+        subq = SelectQuery(self.orders).select(self.user_id_col).where(
+            self.order_id_col.gt(1000)).as_alias("big_orders")
+        query = (SelectQuery(self.users)
+                 .select(self.username_col)
+                 .inner_join(subq, self.id_col.eq(subq.column("user_id")))
+                 .build())
+        self.assertEqual(
+            query, ("SELECT users.username FROM users INNER JOIN (SELECT orders.user_id FROM orders WHERE orders.order_id > %s) AS big_orders ON users.id = big_orders.user_id", [1000]))
+
+    def test_params_order(self):
+        # Subquery for join
+        subq = (SelectQuery(self.orders)
+                .select(self.user_id_col)
+                .where(self.order_id_col.gt(1000))
+                .as_alias("big_orders"))
+
+        # Main query
+        query = (SelectQuery(self.users)
+                 .select(self.username_col, Avg(self.age_col).as_alias("average_age"))
+                 .inner_join(subq, self.id_col.eq(subq.column("user_id")))
+                 .where(self.username_col.eq("Alice"), self.age_col.lt(30))
+                 .group_by(self.username_col)
+                 .having(Avg(self.age_col).gt(25))
+                 .order_by(self.username_col)
+                 .limit(10)
+                 .offset(5)
+                 .build())
+
+        expected_sql = ("SELECT users.username, AVG(users.age) AS average_age "
+                        "FROM users "
+                        "INNER JOIN (SELECT orders.user_id FROM orders WHERE orders.order_id > %s) AS big_orders "
+                        "ON users.id = big_orders.user_id "
+                        "WHERE users.username = %s AND users.age < %s "
+                        "GROUP BY users.username "
+                        "HAVING AVG(users.age) > %s "
+                        "ORDER BY users.username ASC "
+                        "LIMIT 10 OFFSET 5")
+
+        expected_params = [1000, "Alice", 30, 25]
+
+        self.assertEqual(query, (expected_sql, expected_params))
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from ..core.base import Expression
+from ..core.base import Expression, BaseQuery
 
 
 class Condition(Expression):
@@ -8,13 +8,16 @@ class Condition(Expression):
         self.operator = operator
         self.value = value
 
-        if self.operator in ["IN", "NOT IN"] and not isinstance(self.value, (list, tuple, Expression)):
+        if self.operator in ["IN", "NOT IN"] and not isinstance(self.value, (list, tuple, Expression, BaseQuery)):
             raise ValueError(
-                "Values for 'IN' or 'NOT IN' condition must be in a list, tuple or an Expression.")
+                "Values for 'IN' or 'NOT IN' condition must be in a list, tuple, an Expression or BaseQuery.")
 
     def __str__(self):
         if isinstance(self.value, Expression):
             return f"{self.column} {self.operator} {self.value}"
+        elif isinstance(self.value, BaseQuery):
+            subquery_str, _ = self.value.build()
+            return f"{self.column} {self.operator} ({subquery_str})"
         elif self.operator == "BETWEEN":
             return f"{self.column} {self.operator} %s AND %s"
         elif self.operator in ["IS", "IS NOT"] and self.value == "NULL":
@@ -29,6 +32,9 @@ class Condition(Expression):
     def params(self):
         if isinstance(self.value, Expression):
             return self.value.params
+        elif isinstance(self.value, BaseQuery):
+            _, subquery_params = self.value.build()
+            return subquery_params
         elif self.operator in ["IS", "IS NOT"] and self.value == "NULL":
             return []
         elif isinstance(self.value, (list, tuple)):

@@ -6,11 +6,19 @@ class Function(ComparableExpression):
     def __init__(self, function_name, *args):
         self.function_name = function_name
         self.args = args
+        self.alias = None
 
     def __str__(self):
         arguments = ', '.join([str(arg) if isinstance(
             arg, Expression) else "%s" for arg in self.args])
-        return f"{self.function_name}({arguments})"
+        function_representation = f"{self.function_name}({arguments})"
+        if self.alias:
+            function_representation += f" AS {self.alias}"
+        return function_representation
+
+    def as_alias(self, alias_name):
+        self.alias = alias_name
+        return self
 
     @property
     def params(self):
