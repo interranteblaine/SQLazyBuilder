@@ -1,7 +1,8 @@
-from ..core.base import Expression
+from src.sqlazybuilder.core.base import Expression
+from src.sqlazybuilder.expressions.comparable_expression import ComparableExpression
 
 
-class Function(Expression):
+class Function(ComparableExpression):
     def __init__(self, function_name, *args):
         self.function_name = function_name
         self.args = args
